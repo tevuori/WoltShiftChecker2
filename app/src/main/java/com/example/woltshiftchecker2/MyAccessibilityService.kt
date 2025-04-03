@@ -3,32 +3,95 @@ package com.example.woltshiftchecker2
 import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.os.Handler
+import android.os.Looper
+import android.app.NotificationManager
+import androidx.core.app.NotificationCompat
 
 class MyAccessibilityService : AccessibilityService() {
+    private val woltPackageName = "com.wolt.partner" // Upravte podle skutečného package name Wolt Partner
+    private var isChecking = false
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event?.let {
-            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-                val rootNode = rootInActiveWindow // Kořenový prvek aktuálního okna
-                rootNode?.let { node ->
-                    // Hledejte prvky podle ID/textu (přizpůsobte podle Wolt UI)
-                    val shiftNode = node.findAccessibilityNodeInfosByViewId("com.wolt.android:id/shift_time")
-                    if (shiftNode.isNotEmpty()) {
-                        val shiftText = shiftNode[0].text
-                        Log.d("WoltShift", "Detekovaná směna: $shiftText")
-                        // Zde můžete spustit notifikaci nebo uložit data
-                    }
-                    node.recycle() // Vždy uvolněte prostředky!
-                }
+            // Detekujte, zda je Wolt Partner v popředí
+            if (it.packageName == woltPackageName && !isChecking) {
+                isChecking = true
+                startAutomation()
+            }
+        }
+    }
+    override fun onInterrupt() {}
+    private fun startAutomation() {
+        // Krok 1: Klikni na menu (ikona vlevo nahoře)
+        clickMenuButton()
+
+        // Krok 2: Po 3s klikni na "Scheduled hours"
+        Handler(Looper.getMainLooper()).postDelayed({
+            clickScheduledHours()
+        }, 3000)
+    }
+
+    private fun clickMenuButton() {
+        // Najdi menu tlačítko podle ID/obsahu (upravte podle Wolt UI)
+        val rootNode = rootInActiveWindow
+        rootNode?.findAccessibilityNodeInfosByText("Menu")?.firstOrNull()?.let { menuNode ->
+            performClick(menuNode)
+        }
+    }
+    private fun performClick(node: AccessibilityNodeInfo) {
+        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        node.recycle() // Důležité pro uvolnění paměti!
+    }
+    private fun clickScheduledHours() {
+        // Najdi "Scheduled hours" v menu
+        val rootNode = rootInActiveWindow
+        rootNode?.findAccessibilityNodeInfosByText("Scheduled hours")?.firstOrNull()?.let { node ->
+            performClick(node)
+
+            // Krok 3: Po dalším zpoždění klikni na "Frýdek-Místek"
+            Handler(Looper.getMainLooper()).postDelayed({
+                clickLocation()
+            }, 3000)
+        }
+    }
+
+    private fun clickLocation() {
+        val rootNode = rootInActiveWindow
+        rootNode?.findAccessibilityNodeInfosByText("Frýdek-Místek")?.firstOrNull()?.let { node ->
+            performClick(node)
+
+            // Krok 4: Zkontroluj hodnotu "0 / -"
+            Handler(Looper.getMainLooper()).postDelayed({
+                checkShiftAvailability()
+            }, 2000)
+        }
+    }
+
+    private fun checkShiftAvailability() {
+        val rootNode = rootInActiveWindow
+        rootNode?.let { node ->
+            // Hledejte podle ID nebo přesného textu
+            val shiftNodes = node.findAccessibilityNodeInfosByText("0 / -")
+            if (shiftNodes.isNotEmpty()) {
+                val text = shiftNodes[0].text.toString()
+                Log.d("WoltShift", "Detekovaný text: $text")
+                // ... (logika pro kontrolu)
             }
         }
     }
 
-    override fun onInterrupt() {
-        Log.d("Accessibility", "Service interrupted")
-    }
+    private fun showNotification(message: String) {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        val channelId = "shift_channel"
 
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        Log.d("Accessibility", "Service connected!") // Potvrďte připojení
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Wolt Shift Checker")
+            .setContentText(message)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .build()
+
+        notificationManager?.notify(1, notification)
     }
 }
