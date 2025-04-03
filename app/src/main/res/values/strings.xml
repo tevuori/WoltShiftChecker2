@@ -1,0 +1,4 @@
+<resources>
+    <string name="accessibility_service_description">Služba pro kontrolu směn ve Wolt</string>
+    <string name="app_name">WoltShiftChecker2</string>
+</resources>
